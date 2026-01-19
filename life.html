@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Life Calendar - Nitanshu" />
+  <title>Life Calendar - Nitanshu</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="preamble">
+    <h1 class="title"><i>Life</i></h1>
+    <h2 class="subtitle" style="margin-bottom: 35px;">
+      <a href="index.html">back</a>
+    </h2>
+  </div>
+
+  <div style="text-align: center; margin-bottom: 40px;">
+    <div style="position: relative; display: inline-block;">
+      <svg width="150" height="150">
+        <circle cx="75" cy="75" r="60" fill="none" stroke="#ddd" stroke-width="8"/>
+        <circle id="progressCircle" cx="75" cy="75" r="60" fill="none" stroke="black" stroke-width="8"
+                style="transform: rotate(-90deg); transform-origin: 50% 50%; transition: stroke-dashoffset 0.5s;"/>
+      </svg>
+      <h2 id="percentageText" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); margin: 0;">0%</h2>
+    </div>
+  </div>
+
+  <div style="text-align: center;">
+    <div id="calendarGrid"></div>
+  </div>
+
+  <script>
+    const birthYear = 2001;
+    const birthMonth = 4; // May (0-indexed: 0=Jan, 4=May)
+    const birthDay = 6;
+    const endYear = 2070;
+    const endMonth = 4;
+    const endDay = 6;
+
+    const now = new Date();
+    const birthDate = new Date(birthYear, birthMonth, birthDay);
+    const endDate = new Date(endYear, endMonth, endDay);
+
+    const totalWeeks = Math.floor((endDate - birthDate) / (1000 * 60 * 60 * 24 * 7));
+    const completedWeeks = Math.floor((now - birthDate) / (1000 * 60 * 60 * 24 * 7));
+    const percentage = Math.min((completedWeeks / totalWeeks) * 100, 100);
+
+    document.getElementById('percentageText').textContent = Math.round(percentage) + '%';
+
+    const circle = document.getElementById('progressCircle');
+    const radius = 60;
+    const circumference = 2 * Math.PI * radius;
+    const offset = circumference - (percentage / 100) * circumference;
+    circle.style.strokeDasharray = circumference;
+    circle.style.strokeDashoffset = offset;
+
+    const grid = document.getElementById('calendarGrid');
+    for (let week = 0; week < totalWeeks; week++) {
+      const box = document.createElement('span');
+      box.style.display = 'inline-block';
+      box.style.width = '8px';
+      box.style.height = '8px';
+      box.style.margin = '1px';
+      box.style.border = '1px solid #ccc';
+
+      if (week < completedWeeks) {
+        box.style.backgroundColor = 'black';
+      } else {
+        box.style.backgroundColor = 'white';
+      }
+
+      box.title = 'Week ' + week;
+      grid.appendChild(box);
+    }
+  </script>
+</body>
+</html>
