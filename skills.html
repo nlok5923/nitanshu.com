@@ -6,6 +6,7 @@
   <meta name="description" content="skills - Nitanshu" />
   <title>skills - Nitanshu</title>
   <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
  </head>
 
  <body>
@@ -16,22 +17,24 @@
    </h2>
   </div>
 
-  <div>
-   <h2>currently learning</h2>
-   <ul>
-   </ul>
+  <div id="skills-container"></div>
 
-   <h2>programming languages</h2>
-   <ul>
-   </ul>
-
-   <h2>cryptography & zero knowledge</h2>
-   <ul>
-   </ul>
-
-   <h2>protocols & infrastructure</h2>
-   <ul>
-   </ul>
-  </div>
+  <script>
+   fetch("skills/index.json")
+    .then((r) => r.json())
+    .then((files) => {
+     const container = document.getElementById("skills-container");
+     files.forEach((file) => {
+      fetch("skills/" + file)
+       .then((r) => r.text())
+       .then((md) => {
+        const section = document.createElement("div");
+        section.style.marginBottom = "40px";
+        section.innerHTML = marked.parse(md);
+        container.appendChild(section);
+       });
+     });
+    });
+  </script>
  </body>
 </html>
