@@ -6,6 +6,7 @@
   <meta name="description" content="Musings - Nitanshu" />
   <title>Musings - Nitanshu</title>
   <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
   <div id="preamble">
@@ -18,5 +19,51 @@
   <div>
     <p>daily thoughts, observations, and things on my mind.</p>
   </div>
+
+  <div id="musings-container"></div>
+
+  <script>
+    async function loadMusings() {
+      const container = document.getElementById("musings-container");
+      try {
+        const r = await fetch("musings/index.json");
+        const files = await r.json();
+
+        if (files.length === 0) {
+          container.innerHTML = '<p style="opacity: 0.5;">no musings yet.</p>';
+          return;
+        }
+
+        for (let i = 0; i < files.length; i++) {
+          const r2 = await fetch("musings/" + files[i]);
+          const md = await r2.text();
+          const section = document.createElement("div");
+          section.style.marginBottom = "40px";
+
+          const dateMatch = files[i].match(/^(\d{4}-\d{2}-\d{2})/);
+          if (dateMatch) {
+            const tag = document.createElement("span");
+            tag.textContent = dateMatch[1];
+            tag.style.cssText = "font-size: 0.75rem; opacity: 0.45; font-family: monospace; display: block; margin-bottom: 8px;";
+            section.appendChild(tag);
+          }
+
+          const content = document.createElement("div");
+          content.innerHTML = marked.parse(md);
+          section.appendChild(content);
+          container.appendChild(section);
+
+          if (i < files.length - 1) {
+            const hr = document.createElement("hr");
+            hr.style.opacity = "0.15";
+            container.appendChild(hr);
+          }
+        }
+      } catch (e) {
+        container.innerHTML = '<p style="opacity: 0.5;">no musings yet.</p>';
+      }
+    }
+    loadMusings();
+  </script>
 </body>
 </html>
