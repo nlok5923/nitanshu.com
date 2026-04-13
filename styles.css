@@ -47,6 +47,14 @@ code,
   background-color: rgba(0, 0, 0, 0.04);
   border-radius: 3px;
 }
+
+#musings-container img {
+  max-width: 100%;
+  border-radius: 6px;
+  margin: 12px 0;
+  display: block;
+}
+
 .subtitle {
   text-align: center;
   font-size: medium;
