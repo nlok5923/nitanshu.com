@@ -17,9 +17,16 @@ LOG_DIR.mkdir(exist_ok=True)
 
 REMINDER_HOUR = 22  # 10 PM IST
 
+# In-memory state: None means "today", a date string means backfill mode
+active_date: str | None = None
+
 
 def today_str():
     return datetime.now(IST).strftime("%Y-%m-%d")
+
+
+def current_date():
+    return active_date or today_str()
 
 
 def format_time_label(dt):
@@ -29,43 +36,46 @@ def format_time_label(dt):
     return f"**{hour}:{minute} {ampm}**"
 
 
-def log_file(date_str=None):
-    return LOG_DIR / f"{date_str or today_str()}.md"
+def log_file(date_str):
+    return LOG_DIR / f"{date_str}.md"
 
 
-def ensure_header(f, now):
+def ensure_header(f, date_str):
     if not f.exists():
-        f.write_text(f"# {now.strftime('%B')} {now.day}, {now.year}\n\n")
+        try:
+            dt = datetime.strptime(date_str, "%Y-%m-%d")
+            header = f"# {dt.strftime('%B')} {dt.day}, {dt.year}\n\n"
+        except ValueError:
+            header = f"# {date_str}\n\n"
+        f.write_text(header)
 
 
-def append_text_entry(text):
+def append_text_entry(text, date_str):
     now = datetime.now(IST)
     time_label = format_time_label(now)
-    f = log_file()
-    ensure_header(f, now)
+    f = log_file(date_str)
+    ensure_header(f, date_str)
     with f.open("a") as fp:
         fp.write(f"{time_label} — {text}\n")
     return time_label.replace("**", "")
 
 
-def append_photo_entry(image_rel_path, caption=None):
+def append_photo_entry(image_rel_path, date_str, caption=None):
     now = datetime.now(IST)
     time_label = format_time_label(now)
-    f = log_file()
-    ensure_header(f, now)
-
+    f = log_file(date_str)
+    ensure_header(f, date_str)
     with f.open("a") as fp:
         if caption:
             fp.write(f"{time_label} — {caption}\n\n")
         else:
             fp.write(f"{time_label}\n\n")
         fp.write(f"![]({image_rel_path})\n\n")
-
     return time_label.replace("**", "")
 
 
-def get_today_log():
-    f = log_file()
+def get_log(date_str):
+    f = log_file(date_str)
     if not f.exists():
         return None
     return f.read_text().strip()
@@ -79,9 +89,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not text:
         return
 
+    date_str = current_date()
     try:
-        time_label = append_text_entry(text)
-        await update.message.reply_text(f"logged at {time_label} IST")
+        time_label = append_text_entry(text, date_str)
+        suffix = f" (backfilling {date_str})" if active_date else ""
+        await update.message.reply_text(f"logged at {time_label} IST{suffix}")
     except Exception as e:
         await update.message.reply_text(f"error: {e}")
 
@@ -92,23 +104,22 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     now = datetime.now(IST)
     caption = (update.message.caption or "").strip() or None
-    date_str = now.strftime("%Y-%m-%d")
+    date_str = current_date()
     time_str = now.strftime("%H-%M-%S")
 
-    # Save image to logs/images/YYYY-MM-DD/HH-MM-SS.jpg
     img_dir = LOG_DIR / "images" / date_str
     img_dir.mkdir(parents=True, exist_ok=True)
     img_path = img_dir / f"{time_str}.jpg"
 
     try:
-        photo = update.message.photo[-1]  # highest resolution
+        photo = update.message.photo[-1]
         file = await context.bot.get_file(photo.file_id)
         await file.download_to_drive(img_path)
 
-        # Relative path as it will appear in musings/YYYY-MM-DD.md
         image_rel_path = f"images/{date_str}/{time_str}.jpg"
-        time_label = append_photo_entry(image_rel_path, caption)
-        await update.message.reply_text(f"photo logged at {time_label} IST")
+        time_label = append_photo_entry(image_rel_path, date_str, caption)
+        suffix = f" (backfilling {date_str})" if active_date else ""
+        await update.message.reply_text(f"photo logged at {time_label} IST{suffix}")
     except Exception as e:
         await update.message.reply_text(f"error: {e}")
 
@@ -119,9 +130,11 @@ async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "musings bot ready.\n\n"
         "• send text → logged with timestamp\n"
-        "• send photo → saved to logs/images/date/\n"
-        "• send photo with caption → image + text logged together\n\n"
-        f"i'll remind you at {REMINDER_HOUR}:00 IST to push to your site."
+        "• send photo (+ optional caption) → image + text logged together\n"
+        "• /log → see today's log\n"
+        "• /backfill YYYY-MM-DD → switch to a past date\n"
+        "• /today → back to logging today\n\n"
+        f"daily reminder at {REMINDER_HOUR}:00 IST."
     )
 
 
@@ -129,16 +142,54 @@ async def handle_log(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ALLOWED_USER_ID:
         return
 
-    content = get_today_log()
+    date_str = current_date()
+    content = get_log(date_str)
     if not content:
-        await update.message.reply_text("nothing logged today.")
+        await update.message.reply_text(f"nothing logged for {date_str}.")
         return
 
-    await update.message.reply_text(f"today's log:\n\n```\n{content}\n```", parse_mode="Markdown")
+    await update.message.reply_text(
+        f"log for {date_str}:\n\n```\n{content}\n```",
+        parse_mode="Markdown",
+    )
+
+
+async def handle_backfill(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global active_date
+    if update.effective_user.id != ALLOWED_USER_ID:
+        return
+
+    args = context.args
+    if not args:
+        await update.message.reply_text("usage: /backfill YYYY-MM-DD")
+        return
+
+    date_str = args[0].strip()
+    try:
+        datetime.strptime(date_str, "%Y-%m-%d")
+    except ValueError:
+        await update.message.reply_text("invalid date. use YYYY-MM-DD format.")
+        return
+
+    active_date = date_str
+    existing = get_log(date_str)
+    status = "existing log found — new entries will be appended." if existing else "no log yet — will create one."
+    await update.message.reply_text(
+        f"backfill mode: logging to {date_str}\n{status}\n\nsend /today to go back to today."
+    )
+
+
+async def handle_today(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global active_date
+    if update.effective_user.id != ALLOWED_USER_ID:
+        return
+
+    active_date = None
+    await update.message.reply_text(f"back to today ({today_str()}).")
 
 
 async def send_reminder(context):
-    content = get_today_log()
+    content = get_log(today_str())
     if not content:
         return
 
@@ -160,6 +211,8 @@ def main():
 
     app.add_handler(CommandHandler("start", handle_start))
     app.add_handler(CommandHandler("log", handle_log))
+    app.add_handler(CommandHandler("backfill", handle_backfill))
+    app.add_handler(CommandHandler("today", handle_today))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
 
