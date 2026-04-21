@@ -15,6 +15,9 @@ IST = pytz.timezone("Asia/Kolkata")
 LOG_DIR = Path(__file__).parent / "logs"
 LOG_DIR.mkdir(exist_ok=True)
 
+MUSINGS_IMG_DIR = Path(__file__).parent.parent / "musings" / "images"
+MUSINGS_IMG_DIR.mkdir(parents=True, exist_ok=True)
+
 REMINDER_HOUR = 22  # 10 PM IST
 
 # In-memory state: None means "today", a date string means backfill mode
@@ -107,7 +110,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     date_str = current_date()
     time_str = now.strftime("%H-%M-%S")
 
-    img_dir = LOG_DIR / "images" / date_str
+    img_dir = MUSINGS_IMG_DIR / date_str
     img_dir.mkdir(parents=True, exist_ok=True)
     img_path = img_dir / f"{time_str}.jpg"
 
@@ -196,7 +199,7 @@ async def send_reminder(context):
     date_str = today_str()
     msg = (
         f"end of day — copy this to `musings/{date_str}.md`\n"
-        f"also copy `bot/logs/images/{date_str}/` → `musings/images/{date_str}/`\n\n"
+        f"(images already saved to `musings/images/{date_str}/`)\n\n"
         f"```\n{content}\n```"
     )
     await context.bot.send_message(

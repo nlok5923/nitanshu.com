@@ -55,6 +55,10 @@ code,
   display: block;
 }
 
+#musings-container strong {
+  display: block;
+}
+
 .subtitle {
   text-align: center;
   font-size: medium;

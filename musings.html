@@ -50,6 +50,12 @@
 
           const content = document.createElement("div");
           content.innerHTML = marked.parse(md);
+          content.querySelectorAll("img").forEach(img => {
+            const src = img.getAttribute("src");
+            if (src && src.startsWith("images/")) {
+              img.setAttribute("src", "musings/" + src);
+            }
+          });
           section.appendChild(content);
           container.appendChild(section);
 
