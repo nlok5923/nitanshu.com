@@ -20,11 +20,24 @@
     <p>daily thoughts, observations, and things on my mind.</p>
   </div>
 
+  <div id="toc"></div>
+
   <div id="musings-container"></div>
 
   <script>
+    function monthKey(dateStr) {
+      const [y, m] = dateStr.split("-");
+      return `${y}-${m}`;
+    }
+
+    function monthLabel(key) {
+      const [y, m] = key.split("-").map(Number);
+      return new Date(y, m - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+    }
+
     async function loadMusings() {
       const container = document.getElementById("musings-container");
+      const toc = document.getElementById("toc");
       try {
         const r = await fetch("musings/index.json");
         const files = await r.json();
@@ -34,16 +47,51 @@
           return;
         }
 
+        // Build ordered list of unique months
+        const months = [];
+        for (const f of files) {
+          const m = f.match(/^(\d{4}-\d{2})/);
+          if (m && !months.includes(m[1])) months.push(m[1]);
+        }
+
+        // TOC
+        const tocLinks = document.createElement("div");
+        tocLinks.style.cssText = "display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 48px;";
+        for (const key of months) {
+          const link = document.createElement("a");
+          link.href = `#month-${key}`;
+          link.textContent = monthLabel(key);
+          link.style.cssText = "font-size: 0.8rem; font-family: monospace; opacity: 0.55; text-decoration: none; border: 1px solid currentColor; border-radius: 4px; padding: 2px 8px;";
+          link.addEventListener("mouseover", () => link.style.opacity = "1");
+          link.addEventListener("mouseout", () => link.style.opacity = "0.55");
+          tocLinks.appendChild(link);
+        }
+        toc.appendChild(tocLinks);
+
+        // Entries
+        let currentMonth = null;
         for (let i = 0; i < files.length; i++) {
+          const dateMatch = files[i].match(/^(\d{4}-\d{2}-\d{2})/);
+          const dateStr = dateMatch ? dateMatch[1] : null;
+          const mKey = dateStr ? monthKey(dateStr) : null;
+
+          if (mKey && mKey !== currentMonth) {
+            currentMonth = mKey;
+            const heading = document.createElement("h3");
+            heading.id = `month-${mKey}`;
+            heading.textContent = monthLabel(mKey);
+            heading.style.cssText = "font-style: normal; opacity: 0.4; font-size: 0.8rem; font-family: monospace; font-weight: normal; margin: 40px 0 24px;";
+            container.appendChild(heading);
+          }
+
           const r2 = await fetch("musings/" + files[i]);
           const md = await r2.text();
           const section = document.createElement("div");
           section.style.marginBottom = "40px";
 
-          const dateMatch = files[i].match(/^(\d{4}-\d{2}-\d{2})/);
-          if (dateMatch) {
+          if (dateStr) {
             const tag = document.createElement("span");
-            tag.textContent = dateMatch[1];
+            tag.textContent = dateStr;
             tag.style.cssText = "font-size: 0.75rem; opacity: 0.45; font-family: monospace; display: block; margin-bottom: 8px;";
             section.appendChild(tag);
           }

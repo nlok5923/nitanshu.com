@@ -1,4 +1,6 @@
+import json
 import os
+import shutil
 from datetime import datetime, time
 import pytz
 from pathlib import Path
@@ -15,7 +17,8 @@ IST = pytz.timezone("Asia/Kolkata")
 LOG_DIR = Path(__file__).parent / "logs"
 LOG_DIR.mkdir(exist_ok=True)
 
-MUSINGS_IMG_DIR = Path(__file__).parent.parent / "musings" / "images"
+MUSINGS_DIR = Path(__file__).parent.parent / "musings"
+MUSINGS_IMG_DIR = MUSINGS_DIR / "images"
 MUSINGS_IMG_DIR.mkdir(parents=True, exist_ok=True)
 
 REMINDER_HOUR = 22  # 10 PM IST
@@ -77,6 +80,24 @@ def append_photo_entry(image_rel_path, date_str, caption=None):
     return time_label.replace("**", "")
 
 
+def publish_log(date_str):
+    src = log_file(date_str)
+    if not src.exists():
+        return False, "no log found for that date."
+
+    shutil.copy2(src, MUSINGS_DIR / f"{date_str}.md")
+
+    index_file = MUSINGS_DIR / "index.json"
+    entries = json.loads(index_file.read_text()) if index_file.exists() else []
+    filename = f"{date_str}.md"
+    if filename not in entries:
+        entries.append(filename)
+        entries.sort(reverse=True)
+        index_file.write_text(json.dumps(entries) + "\n")
+
+    return True, f"published {date_str} to musings."
+
+
 def get_log(date_str):
     f = log_file(date_str)
     if not f.exists():
@@ -135,6 +156,7 @@ async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• send text → logged with timestamp\n"
         "• send photo (+ optional caption) → image + text logged together\n"
         "• /log → see today's log\n"
+        "• /publish [YYYY-MM-DD] → push log to musings site\n"
         "• /backfill YYYY-MM-DD → switch to a past date\n"
         "• /today → back to logging today\n\n"
         f"daily reminder at {REMINDER_HOUR}:00 IST."
@@ -182,6 +204,21 @@ async def handle_backfill(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+async def handle_publish(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ALLOWED_USER_ID:
+        return
+
+    date_str = (context.args[0].strip() if context.args else None) or today_str()
+    try:
+        datetime.strptime(date_str, "%Y-%m-%d")
+    except ValueError:
+        await update.message.reply_text("invalid date. use YYYY-MM-DD format.")
+        return
+
+    ok, msg = publish_log(date_str)
+    await update.message.reply_text(msg)
+
+
 async def handle_today(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global active_date
     if update.effective_user.id != ALLOWED_USER_ID:
@@ -198,7 +235,7 @@ async def send_reminder(context):
 
     date_str = today_str()
     msg = (
-        f"end of day — copy this to `musings/{date_str}.md`\n"
+        f"end of day — send /publish to push to the site\n"
         f"(images already saved to `musings/images/{date_str}/`)\n\n"
         f"```\n{content}\n```"
     )
@@ -214,6 +251,7 @@ def main():
 
     app.add_handler(CommandHandler("start", handle_start))
     app.add_handler(CommandHandler("log", handle_log))
+    app.add_handler(CommandHandler("publish", handle_publish))
     app.add_handler(CommandHandler("backfill", handle_backfill))
     app.add_handler(CommandHandler("today", handle_today))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
