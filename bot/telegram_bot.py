@@ -1,6 +1,7 @@
 import json
 import os
 import shutil
+import subprocess
 from datetime import datetime, time
 import pytz
 from pathlib import Path
@@ -80,10 +81,19 @@ def append_photo_entry(image_rel_path, date_str, caption=None):
     return time_label.replace("**", "")
 
 
+def git(args, cwd):
+    result = subprocess.run(["git"] + args, cwd=cwd, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr.strip() or result.stdout.strip())
+    return result.stdout.strip()
+
+
 def publish_log(date_str):
     src = log_file(date_str)
     if not src.exists():
         return False, "no log found for that date."
+
+    repo = MUSINGS_DIR.parent
 
     shutil.copy2(src, MUSINGS_DIR / f"{date_str}.md")
 
@@ -95,7 +105,19 @@ def publish_log(date_str):
         entries.sort(reverse=True)
         index_file.write_text(json.dumps(entries) + "\n")
 
-    return True, f"published {date_str} to musings."
+    img_dir = MUSINGS_IMG_DIR / date_str
+    to_add = [
+        f"musings/{date_str}.md",
+        "musings/index.json",
+    ]
+    if img_dir.exists():
+        to_add.append(f"musings/images/{date_str}/")
+
+    git(["add"] + to_add, cwd=repo)
+    git(["commit", "-m", f"publish {date_str} musings"], cwd=repo)
+    git(["push"], cwd=repo)
+
+    return True, f"published {date_str} and pushed to prod."
 
 
 def get_log(date_str):
@@ -215,8 +237,11 @@ async def handle_publish(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("invalid date. use YYYY-MM-DD format.")
         return
 
-    ok, msg = publish_log(date_str)
-    await update.message.reply_text(msg)
+    try:
+        ok, msg = publish_log(date_str)
+        await update.message.reply_text(msg)
+    except Exception as e:
+        await update.message.reply_text(f"error: {e}")
 
 
 async def handle_today(update: Update, context: ContextTypes.DEFAULT_TYPE):
